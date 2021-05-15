@@ -47,7 +47,8 @@ func testLog_AppendRead(t *testing.T, l *Log) {
 
 func testLog_OutOfRangeErr(t *testing.T, l *Log) {
 	_, err := l.Read(1)
-	require.Error(t, err)
+	apiErr := err.(api.ErrOffsetOutOfRange)
+	require.Equal(t, uint64(1), apiErr.Offset)
 }
 
 // when a log is created, the log bootstraps itself from the data stored by prior log instances.
