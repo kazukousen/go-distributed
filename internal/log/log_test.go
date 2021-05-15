@@ -2,7 +2,6 @@ package log
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -22,7 +21,7 @@ func TestLog(t *testing.T) {
 		"truncate":                          testLog_Truncate,
 	} {
 		t.Run(scenario, func(t *testing.T) {
-			dir, err := ioutil.TempDir("", "log-test")
+			dir, err := os.MkdirTemp("", "log-test")
 			require.NoError(t, err)
 			defer os.RemoveAll(dir)
 

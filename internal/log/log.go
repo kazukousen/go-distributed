@@ -2,7 +2,6 @@ package log
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -40,7 +39,7 @@ func NewLog(dir string, initialOffset, maxStoreBytes, maxIndexBytes uint64) (*Lo
 }
 
 func (l *Log) setup() error {
-	files, err := ioutil.ReadDir(l.dir)
+	files, err := os.ReadDir(l.dir)
 	if err != nil {
 		return err
 	}
