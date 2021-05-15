@@ -153,7 +153,7 @@ func (l *Log) Truncate(lowest uint64) error {
 
 	var segments []*segment
 	for _, seg := range l.segments {
-		if seg.nextOffset-1 <= lowest {
+		if latestOffset := seg.nextOffset - 1; latestOffset <= lowest {
 			if err := seg.Remove(); err != nil {
 				return err
 			}

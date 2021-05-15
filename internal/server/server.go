@@ -2,7 +2,17 @@ package server
 
 import (
 	"context"
+	"time"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 
 	api "github.com/kazukousen/go-distributed/api/v1"
@@ -20,8 +30,37 @@ type CommitLog interface {
 	Read(uint64) (*api.Record, error)
 }
 
-func NewGRPCServer(commitLog CommitLog) (*grpc.Server, error) {
-	gsrv := grpc.NewServer()
+func NewGRPCServer(commitLog CommitLog, grpcOpts ...grpc.ServerOption) (*grpc.Server, error) {
+	logger := zap.L().Named("server")
+	zapOpts := []grpc_zap.Option{
+		grpc_zap.WithDurationField(
+			func(dur time.Duration) zapcore.Field {
+				return zap.Int64("grpc.time_ns", dur.Nanoseconds())
+			},
+		),
+	}
+	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
+	err := view.Register(ocgrpc.DefaultClientViews...)
+	if err != nil {
+		return nil, err
+	}
+
+	grpcOpts = append(grpcOpts,
+		grpc.StreamInterceptor(
+			grpc_middleware.ChainStreamServer(
+				grpc_ctxtags.StreamServerInterceptor(),
+				grpc_zap.StreamServerInterceptor(logger, zapOpts...),
+			),
+		),
+		grpc.UnaryInterceptor(
+			grpc_middleware.ChainUnaryServer(
+				grpc_ctxtags.UnaryServerInterceptor(),
+				grpc_zap.UnaryServerInterceptor(logger, zapOpts...),
+			),
+		),
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+	)
+	gsrv := grpc.NewServer(grpcOpts...)
 	srv, err := newServer(commitLog)
 	if err != nil {
 		return nil, err
@@ -47,7 +86,7 @@ func (s *grpcServer) Produce(_ context.Context, req *api.ProduceRequest) (*api.P
 	return &api.ProduceResponse{Offset: off}, nil
 }
 
-func (s *grpcServer) Consume(ctx context.Context, req *api.ConsumeRequest) (*api.ConsumeResponse, error) {
+func (s *grpcServer) Consume(_ context.Context, req *api.ConsumeRequest) (*api.ConsumeResponse, error) {
 	rec, err := s.commitLog.Read(req.Offset)
 	if err != nil {
 		return nil, err
